@@ -1,0 +1,49 @@
+Informações extraídas do artigo para o README:
+
+TÍTULO: Tubular Riemannian Laplace Approximations for Bayesian Neural Networks
+
+PROBLEMA:
+- Aproximações de Laplace Euclidianas lutam com superfícies de perda altamente anisotrópicas e curvadas
+- Grandes grupos de simetria caracterizam modelos deep modernos
+- Uma única elipsoide Gaussiana não consegue capturar vales de perda longos e curvados
+
+SOLUÇÃO TRL:
+- Modela o posterior como um "tubo probabilístico" que segue vales de baixa perda
+- Usa métrica Fisher/Gauss-Newton para separar incerteza tangencial (dominada pelo prior) da transversal (dominada pelos dados)
+- Três ingredientes: (i) eixo dado por curva que traça vale de invariância aproximada, (ii) covariância transversal pela métrica Fisher/GN, (iii) variância tangencial governada pelo prior
+
+ALGORITMO (Algorithm 1):
+- Requer: θ_MAP pré-treinado, step size Δs, dimensão transversal k_⊥, escala do tubo β_⊥
+- Stage A: Construção do Tubo (T passos)
+- Stage B: Amostragem & Predição (S amostras)
+
+EXPERIMENTOS:
+1. Toy Tasks: Regressão 1D e classificação 2D
+   - TRL: NLL 0.03 vs 0.95 (ELA) para regressão
+   - TRL: NLL 0.09 vs 0.39 (ELA) para classificação
+
+2. ResNet-18 no CIFAR-10:
+   - 11M parâmetros
+   - 50 épocas SGD com cosine annealing
+   - Acurácia teste: 94.3%
+   
+   Resultados (Tabela 1):
+   | Método          | Acc ↑   | NLL ↓  | ECE ↓  | Brier ↓ |
+   |-----------------|---------|--------|--------|---------|
+   | MAP             | 94.32%  | 0.2110 | 0.0296 | 0.0910  |
+   | ELA (Last-Layer)| 94.06%  | 0.3450 | 0.1676 | 0.1307  |
+   | LLA (Last-Layer)| 94.26%  | 0.1942 | 0.0215 | 0.0866  |
+   | TRL (Full-Net)  | 94.19%  | 0.1837 | 0.0063 | 0.0875  |
+
+CONFIGURAÇÃO TRL:
+- k_⊥ = 20 (rank transversal via Lanczos)
+- T = 20 (passos do spine)
+- Δs = 0.03 (step size ao longo do vale)
+- β_⊥ = 1.0 (fator de escala transversal)
+- Usa FixBN para recalibrar BatchNorm
+
+DEPENDÊNCIAS:
+- laplace-torch
+- curvlinops-for-pytorch>=2.0,<3.0
+- torch, torchvision
+- matplotlib, scikit-learn
