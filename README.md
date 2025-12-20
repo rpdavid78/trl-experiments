@@ -126,6 +126,6 @@ If you find this code useful for your research, please consider citing our paper
   title={Tubular Riemannian Laplace Approximations for Bayesian Neural Networks},
   author={Anonymous},
   booktitle={International Conference on Machine Learning (ICML)},
-  year={2025}
+  year={2026}
 }
 ```
