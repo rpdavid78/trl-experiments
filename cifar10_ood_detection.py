@@ -16,7 +16,7 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from laplace import Laplace
 
 # ==============================================================================
-# CONFIGURAÇÕES
+# SETTINGS
 # ==============================================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 CHECKPOINT_PATH = "resnet18_cifar10_map_relu_v2.pth"
@@ -24,10 +24,10 @@ BATCH_SIZE = 128
 EPOCHS = 50 
 LEARNING_RATE = 0.1
 
-print(f"Executando em: {DEVICE}")
+print(f"Running on: {DEVICE}")
 
 # ==============================================================================
-# 1. DADOS
+# 1. DATA
 # ==============================================================================
 
 def get_data_loaders():
@@ -53,7 +53,7 @@ def get_data_loaders():
     return train_loader, val_loader, test_loader, ood_loader
 
 # ==============================================================================
-# 2. MODELO
+# 2. MODEL
 # ==============================================================================
 class BasicBlock(nn.Module):
     expansion = 1
@@ -217,9 +217,9 @@ class PracticalTRL:
             nxt = curr + self.ds*v - self.eta*gp
             d = nxt - curr; vn = d/(d.norm()+1e-9)
             np_ = vn@N; nt = N - torch.outer(vn, np_); 
-            nn_,_ = torch.linalg.qr(nt, mode='reduced') # Correção aqui
+            nn_,_ = torch.linalg.qr(nt, mode='reduced') # Correction here
             
-            curr,v,N = nxt, vn, nn_ # Correção aqui (era Nn)
+            curr,v,N = nxt, vn, nn_ # Correction here (it was Nn)
 
     def predict(self, loader, n_samples, fixb, boost=1.0):
         eff_beta = self.beta * boost
@@ -257,9 +257,9 @@ def get_metrics(p, t):
 
 def entropy(p): return -torch.sum(p*torch.log(p.clamp(1e-9,1)),1).numpy()
 
-# FUNÇÃO CORRIGIDA PARA RECEBER 5 ARGUMENTOS
+# CORRECTED FUNCTION TO RECEIVE 5 ARGUMENTS
 def plot_final(ps, tg, labels): 
-    # Cores fixas baseadas na ordem esperada
+    # Fixed colors based on the expected order
     cols = ['gray', 'orange', 'blue', 'green']
 
     plt.figure(figsize=(12,5)); plt.subplot(1,2,1)
@@ -375,11 +375,11 @@ if __name__ == '__main__':
     print(f"LLA | {rl[0]:.4f} | {rl[1]:.4f} | {rl[2]:.4f}")
     print(f"TRL | {rt[0]:.4f} | {rt[1]:.4f} | {rt[2]:.4f}")
     
-   #Agrupa as predições numa lista
+   # Group the predictions into a list
     probs_list = [pm, pe, pl, pt]
     labels_list = ['MAP', 'ELA', 'LLA', 'TRL']
     
-    # Chama com 3 argumentos
+    # Call with 3 arguments
     plot_final(probs_list, targets, labels_list) 
     
     # 5. OOD Evaluation

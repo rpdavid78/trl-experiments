@@ -11,7 +11,7 @@ from torch.nn.utils import vector_to_parameters, parameters_to_vector
 from sklearn.metrics import roc_auc_score
 
 # ==============================================================================
-# CONFIGURAÇÕES
+# SETTINGS
 # ==============================================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 128
@@ -20,18 +20,18 @@ LR = 0.1
 MOMENTUM = 0.9
 WD = 5e-4
 
-# Configs Específicas dos Baselines
-ENSEMBLE_SIZE = 5         # Padrão de ouro (Lakshminarayanan et al.)
-MCD_SAMPLES = 25          # Amostras para MC Dropout
+# Specific Configurations of the Baselines
+ENSEMBLE_SIZE = 5         # Gold standard (Lakshminarayanan et al.)
+MCD_SAMPLES = 25          # Samples for MC Dropout
 MCD_P = 0.1               # Taxa de Dropout
-SWAG_SAMPLES = 25         # Amostras para SWAG
-SWAG_START_EPOCH = 30     # Começa a coletar estatísticas após 60% do treino
-SWAG_LR = 0.01            # LR constante para a fase de coleta
+SWAG_SAMPLES = 25         # Samples for SWAG
+SWAG_START_EPOCH = 30     # Start collecting statistics after 60% of the training
+SWAG_LR = 0.01            # Constant LR for the collection phase
 
-print(f"Executando Baselines SOTA em: {DEVICE}")
+print(f"Running SOTA Baselines on: {DEVICE}")
 
 # ==============================================================================
-# 1. DADOS (ID: CIFAR-10, OOD: SVHN)
+# 1. DATA (ID: CIFAR-10, OOD: SVHN)
 # ==============================================================================
 def get_loaders():
     stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -44,7 +44,7 @@ def get_loaders():
     # CIFAR-10
     trainset_full = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=t_train)
 
-     # Usamos a mesma seed (42) para garantir que as 45k imagens sejam as mesmas do TRL
+     # We use the same seed (42) to ensure that the 45k images are the same as those in TRL.
     tr_sub, _ = torch.utils.data.random_split(trainset_full, [45000, 5000], generator=torch.Generator().manual_seed(42))
 
     tr_loader = torch.utils.data.DataLoader(tr_sub, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
@@ -52,7 +52,7 @@ def get_loaders():
     testset = torchvision.datasets.CIFAR10(root="./data", train=False, download=True, transform=t_test)
     ts_loader = torch.utils.data.DataLoader(testset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
 
-    # SVHN (OOD) - Usando subset para rapidez na validação
+    # SVHN (OOD) - Using subset for faster validation
     svhn = torchvision.datasets.SVHN(root='./data', split='test', download=True, transform=t_test)
     ood_sub = torch.utils.data.Subset(svhn, range(2000))
     ood_loader = torch.utils.data.DataLoader(ood_sub, batch_size=BATCH_SIZE, shuffle=False)
@@ -60,7 +60,7 @@ def get_loaders():
     return tr_loader, ts_loader, ood_loader
 
 # ==============================================================================
-# 2. MODELOS (ResNet Padrão e ResNet com Dropout)
+# 2. MODELS (Standard ResNet and ResNet with Dropout)
 # ==============================================================================
 class BasicBlock(nn.Module):
     expansion = 1
@@ -68,7 +68,7 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.relu1 = nn.ReLU(inplace=True)  # <-- aqui
+        self.relu1 = nn.ReLU(inplace=True)  # <-- here
 
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
@@ -102,7 +102,7 @@ class ResNetCIFAR(nn.Module):
         self.layer4 = self._make_layer(512, 2, stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         
-        # Dropout antes da linear (Gal & Ghahramani para CNNs)
+        # Dropout before the linear (Gal & Ghahramani for CNNs)
         if self.use_dropout:
             self.dropout = nn.Dropout(p=drop_p)
             
@@ -155,7 +155,7 @@ def get_metrics(p, t):
 def entropy(p): return -torch.sum(p * torch.log(p.clamp(1e-9, 1.0)), dim=1).cpu().numpy()
 
 def fix_bn(model, loader):
-    """Recalibra BN para SWAG"""
+    """Recalibrate BN to SWAG"""
     model.train()
     with torch.no_grad():
         for x, _ in loader:
@@ -172,7 +172,7 @@ def train_epoch(model, loader, opt, crit):
         opt.step()
 
 # ==============================================================================
-# 4. IMPLEMENTAÇÃO DOS BASELINES
+# 4. IMPLEMENTATION OF THE BASELINES
 # ==============================================================================
 
 # --- A. DEEP ENSEMBLES ---
@@ -185,7 +185,7 @@ def run_ensembles(tr_loader, ts_loader, ood_loader):
         m = ResNetCIFAR().to(DEVICE)
         
         if os.path.exists(path):
-            print(f"    Carregando Ensemble {i}...")
+            print(f"Loading Ensemble {i}...")
             m.load_state_dict(torch.load(path, map_location=DEVICE))
         else:
             print(f"    Treinando Ensemble {i}...")
@@ -201,7 +201,7 @@ def run_ensembles(tr_loader, ts_loader, ood_loader):
         m.eval()
         models.append(m)
 
-    # Inferência Ensemble
+    # Ensemble Inference
     def predict_ens(loader):
         probs_all = []
         targets = []
@@ -237,7 +237,7 @@ def run_mcdropout(tr_loader, ts_loader, ood_loader):
             sched.step()
         torch.save(m.state_dict(), path)
 
-    # Inferência MCD: Mantém dropout ativo (train mode)
+    # MCD Inference: Keeps dropout active (train mode)
     def predict_mcd(loader):
         probs_all = []
         targets = []
@@ -265,7 +265,7 @@ class SWAG(nn.Module):
         super().__init__()
         self.base_model = base_model
         self.register_buffer('n_models', torch.zeros(1))
-        # Armazena média e quadrado da média para cada parâmetro
+        # Stores the mean and the square of the mean for each parameter
         self.params_mean = nn.ParameterDict()
         self.params_sq_mean = nn.ParameterDict()
         
@@ -280,7 +280,7 @@ class SWAG(nn.Module):
             key = name.replace('.', '_')
             curr_mean = self.params_mean[key]
             curr_sq = self.params_sq_mean[key]
-            # Média Online
+            # Online Average
             new_mean = curr_mean * (1.0 - factor) + param.data * factor
             new_sq = curr_sq * (1.0 - factor) + (param.data ** 2) * factor
             self.params_mean[key].data.copy_(new_mean)
@@ -293,7 +293,7 @@ class SWAG(nn.Module):
             mean = self.params_mean[key]
             sq_mean = self.params_sq_mean[key]
             
-            # Var = E[x^2] - (E[x])^2. Clamp para evitar erros numéricos negativos.
+            # Var = E[x^2] - (E[x])^2. Clamp to prevent negative numerical errors.
             var = torch.clamp(sq_mean - mean ** 2, min=1e-30)
             std = torch.sqrt(var)
             
@@ -309,7 +309,7 @@ def run_swag(tr_loader, ts_loader, ood_loader):
     
     if os.path.exists(path):
         print("    Carregando estado SWAG...")
-        # Carregamento simplificado: assumimos que salvamos o state_dict do wrapper
+        # Simplified loading: we assume that we save the wrapper's state_dict
         swag_model.load_state_dict(torch.load(path, map_location=DEVICE))
     else:
         print("    Treinando SWAG...")
@@ -317,13 +317,13 @@ def run_swag(tr_loader, ts_loader, ood_loader):
         sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, EPOCHS)
         crit = nn.CrossEntropyLoss()
         
-        # Fase 1: Treino Padrão
+        # Phase 1: Standard Training
         for ep in range(SWAG_START_EPOCH):
             train_epoch(model, tr_loader, opt, crit)
             sched.step()
             
         # Fase 2: Coleta SWAG (LR Constante)
-        # Muda otimizador para LR fixo
+        # Change optimizer to fixed LR
         opt_swag = torch.optim.SGD(model.parameters(), lr=SWAG_LR, momentum=MOMENTUM, weight_decay=WD)
         
         for ep in range(SWAG_START_EPOCH, EPOCHS):
@@ -332,15 +332,15 @@ def run_swag(tr_loader, ts_loader, ood_loader):
             
         torch.save(swag_model.state_dict(), path)
 
-    # Inferência SWAG
+    # SWAG Inference
     def predict_swag(loader):
         probs_all = []
         targets = []
         
-        # Precisa coletar targets uma vez
+        # You need to collect targets once
         first_pass = True
         
-        # Buffer de predições acumuladas
+        # Accumulated prediction buffer
         list_outs = []
         
         for s in range(SWAG_SAMPLES):
@@ -380,12 +380,12 @@ def run_swag(tr_loader, ts_loader, ood_loader):
 if __name__ == "__main__":
     tr, ts, ood = get_loaders()
     
-    # Rodar Métodos
+    # Run Methods
     ens_id, ens_t, ens_ood = run_ensembles(tr, ts, ood)
     mcd_id, mcd_t, mcd_ood = run_mcdropout(tr, ts, ood)
     swa_id, swa_t, swa_ood = run_swag(tr, ts, ood)
     
-    # Calcular Métricas
+    # Calculate Metrics
     def report(name, pid, tid, pood):
         acc, nll, ece, bri = get_metrics(pid, tid)
         

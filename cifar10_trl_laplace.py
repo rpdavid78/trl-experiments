@@ -16,31 +16,31 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 from laplace import Laplace
 
 # ==============================================================================
-# CONFIGURAÇÕES GLOBAIS
+# GLOBAL SETTINGS
 # ==============================================================================
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Nome do checkpoint para salvar os pesos treinados
+# Checkpoint name for saving the trained weights
 CHECKPOINT_PATH = "resnet18_cifar10_map_relu_v2.pth"
 
-# Batch size de treino e avaliação
+# Training and evaluation batch size
 BATCH_SIZE = 128
 
-# Número de épocas para treino do MAP (50 é um bom balanço entre tempo e acurácia)
+# Number of epochs for MAP training (50 is a good balance between time and accuracy)
 EPOCHS = 50 
 LEARNING_RATE = 0.1
 
-print(f"Executando em: {DEVICE}")
+print(f"Running on: {DEVICE}")
 
 
 # ==============================================================================
-# 1. PREPARAÇÃO DE DADOS (CIFAR-10)
+# 1. DATA PREPARATION (CIFAR-10)
 # ==============================================================================
 
 def get_data():
     print(">>> Preparando Dados CIFAR-10...")
 
-    # Data Augmentation padrão para SOTA em CIFAR-10
+    # Standard Data Augmentation for SOTA on CIFAR-10
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -53,13 +53,13 @@ def get_data():
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
     ])
 
-    # Download dos datasets
+    # Download of the datasets
     trainset_full = torchvision.datasets.CIFAR10(
         root="./data", train=True, download=True, transform=transform_train
     )
     
-    # Divisão: 45k para Treino (MAP) / 5k para Validação (Grid Search do TRL)
-    # Fixamos a seed para reprodutibilidade dos splits
+    # Division: 45k for Training (MAP) / 5k for Validation (TRL Grid Search)
+    # We set the seed for reproducibility of the splits
     train_subset, val_subset = torch.utils.data.random_split(
         trainset_full, [45000, 5000], generator=torch.Generator().manual_seed(42)
     )
@@ -85,15 +85,15 @@ def get_data():
 
 
 def flatten_tensors(tensors):
-    """Concatena uma lista de tensores em um vetor 1D contínuo."""
+    """Concatenate a list of tensors into a continuous 1D vector."""
     return torch.cat([t.contiguous().view(-1) for t in tensors])
 
 
 # ==============================================================================
-# 2. MODELO: RESNET-18 CUSTOMIZADA (ReLU)
+# 2. MODEL: CUSTOMIZED RESNET-18 (ReLU)
 # ==============================================================================
-# Usamos uma definição explícita para evitar problemas de compatibilidade
-# com a biblioteca 'curvlinops' do Laplace. Usamos nn.ReLU explícito.
+# We use an explicit definition to avoid compatibility issues
+# with the 'curvlinops' library from Laplace. We use explicit nn.ReLU.
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -105,13 +105,13 @@ class BasicBlock(nn.Module):
             in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
         self.bn1 = nn.BatchNorm2d(planes)
-        self.relu1 = nn.ReLU(inplace=True) # Explícito
+        self.relu1 = nn.ReLU(inplace=True) # Explicit
         
         self.conv2 = nn.Conv2d(
             planes, planes, kernel_size=3, stride=1, padding=1, bias=False
         )
         self.bn2 = nn.BatchNorm2d(planes)
-        self.relu2 = nn.ReLU(inplace=True) # Explícito
+        self.relu2 = nn.ReLU(inplace=True) # Explicit
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion * planes:
@@ -135,13 +135,13 @@ class ResNetCIFAR(nn.Module):
         super(ResNetCIFAR, self).__init__()
         self.in_planes = 64
         
-        # Adaptação geométrica para CIFAR-10 (Imagens 32x32)
-        # Substituímos o kernel 7x7 stride 2 por 3x3 stride 1 para não reduzir demais a dimensão
+        # Geometric adaptation for CIFAR-10 (32x32 images)
+        # We replaced the 7x7 stride 2 kernel with a 3x3 stride 1 to avoid reducing the dimension too much
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True) # Explícito
+        self.relu = nn.ReLU(inplace=True) # Explicit
         
-        # Camadas ResNet padrão
+        # Standard ResNet Layers
         self.layer1 = self._make_layer(64, 2, stride=1)
         self.layer2 = self._make_layer(128, 2, stride=2)
         self.layer3 = self._make_layer(256, 2, stride=2)
@@ -172,33 +172,33 @@ class ResNetCIFAR(nn.Module):
 
 
 def get_resnet_cifar_relu():
-    """Instancia a ResNet configurada para CIFAR na GPU correta."""
+    """Instantiate the ResNet configured for CIFAR on the correct GPU."""
     return ResNetCIFAR(num_classes=10).to(DEVICE)
 
 
 # ==============================================================================
-# 3. FUNÇÃO DE TREINAMENTO (MAP ESTIMATION)
+# 3. TRAINING FUNCTION (MAP ESTIMATION)
 # ==============================================================================
 
 def train_or_load_map(train_loader, val_loader):
     model = get_resnet_cifar_relu()
 
-    # Se já existe checkpoint treinado, carregue-o para poupar tempo
+    # If a trained checkpoint already exists, load it to save time
     if os.path.exists(CHECKPOINT_PATH):
-        print(f">>> Carregando MAP do checkpoint: {CHECKPOINT_PATH}")
+        print(f">>> Loading MAP from checkpoint: {CHECKPOINT_PATH}")
         try:
             model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
             return model
         except Exception as e:
-            print(f"[Aviso] Erro ao carregar checkpoint ({e}). Treinando do zero.")
+            print(f"[Notice] Error loading checkpoint ({e}). Training from scratch.")
 
-    print(f">>> Iniciando Treinamento MAP do Zero ({EPOCHS} épocas)...")
+    print(f">>> Starting MAP Training from Scratch ({EPOCHS} epochs)...")
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(
         model.parameters(), lr=LEARNING_RATE, momentum=0.9, weight_decay=5e-4
     )
-    # Cosine Scheduler é padrão para atingir SOTA em ResNets
+    # Cosine Scheduler is standard for achieving SOTA in ResNets
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
     start_time = time.time()
@@ -226,7 +226,7 @@ def train_or_load_map(train_loader, val_loader):
         
         scheduler.step()
 
-        # Validação periódica
+        # Periodic validation
         if (epoch + 1) % 5 == 0 or epoch == EPOCHS - 1:
             model.eval()
             val_correct = 0
@@ -248,29 +248,27 @@ def train_or_load_map(train_loader, val_loader):
                 f"Time {(time.time()-start_time)/60:.1f}min"
             )
             
-            # Salva o melhor modelo encontrado
+            # Save the best model found
             if val_acc > best_acc:
                 best_acc = val_acc
                 torch.save(model.state_dict(), CHECKPOINT_PATH)
 
-    print(f">>> Treino Finalizado. Melhor Val Acc: {best_acc:.2f}%")
-    # Carrega o melhor estado salvo
+    print(f">>> Training Completed. Best Val Acc: {best_acc:.2f}%")
+    # Load the best saved state
     model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
     return model
 
 
 # ==============================================================================
-# 4. IMPLEMENTAÇÃO COMPLETA DO TRL (PracticalTRL)
+# 4. COMPLETE IMPLEMENTATION OF TRL (PracticalTRL)
 # ==============================================================================
 
 def get_hvp_function(model, loader, device, num_batches=10):
-    """
-    Retorna uma função que computa o produto Hessiana-Vetor (H*v)
-    usando um subconjunto de dados para eficiência e estabilidade (Lanczos).
-    """
+    """Returns a function that computes the Hessian-Vector product (H*v)
+using a subset of data for efficiency and stability (Lanczos)."""
     params = [p for p in model.parameters() if p.requires_grad]
     
-    # Pré-carrega um buffer de batches para garantir consistência no Lanczos
+    # Pre-loads a buffer of batches to ensure consistency in Lanczos
     data_cache = []
     it = iter(loader)
     for _ in range(num_batches):
@@ -280,13 +278,13 @@ def get_hvp_function(model, loader, device, num_batches=10):
             break
 
     def hvp(v_numpy):
-        # Converte vetor numpy (do Scipy) para Torch
+        # Convert a numpy vector (from Scipy) to Torch
         v = torch.from_numpy(v_numpy).float().to(device)
 
         model.zero_grad()
         total_loss = 0.0
         
-        # Calcula Loss média sobre o buffer
+        # Calculate average loss over the buffer
         for x, y in data_cache:
             x = x.to(device)
             y = y.to(device)
@@ -311,12 +309,10 @@ def get_hvp_function(model, loader, device, num_batches=10):
 
 
 def fix_bn(model, loader, device, num_batches=15):
-    """
-    Recalibra as estatísticas do Batch Norm (Running Mean/Var)
-    passando dados de treino pelo modelo nos pesos atuais.
-    Crucial para performance de métodos Bayesianos em ResNets.
-    """
-    model.train()  # Habilita atualização dos buffers BN
+    """Recalibrates the Batch Norm statistics (Running Mean/Var)
+by passing training data through the model with the current weights.
+Crucial for the performance of Bayesian methods in ResNets."""
+    model.train()  # Enables BN buffer updates
     with torch.no_grad():
         it = iter(loader)
         for _ in range(num_batches):
@@ -325,19 +321,19 @@ def fix_bn(model, loader, device, num_batches=15):
                 model(x.to(device))
             except StopIteration:
                 break
-    model.eval()   # Volta para modo avaliação
+    model.eval()   # Return to evaluation mode
 
 
 class PracticalTRL:
     def __init__(
         self,
         map_model,
-        prior_vec,      # Vetor de precisão da prior (diagonal)
-        train_loader,   # Dataloader de treino (com shuffle=True)
-        steps=10,       # Comprimento da espinha (T)
-        k_perp=10,      # Dimensão transversal (Lanczos)
-        step_size=0.05, # Passo do SGD Geométrico
-        eta=0.1,        # Taxa de correção transversal
+        prior_vec,      # Prior precision vector (diagonal)
+        train_loader,   # Training DataLoader (with shuffle=True)
+        steps=10,       # Spine length (T)
+        k_perp=10,      # Transverse dimension (Lanczos)
+        step_size=0.05, # Geometric SGD Step
+        eta=0.1,        # Cross-correction rate
         tube_scale=1.0, # Beta (largura do tubo)
     ):
         self.model = copy.deepcopy(map_model)
@@ -350,17 +346,17 @@ class PracticalTRL:
         self.eta = eta
         self.beta = tube_scale
 
-        self.spine = []  # Armazena os pontos da trajetória: {theta, N, L}
+        self.spine = []  # Stores the points of the trajectory: {theta, N, L}
 
     def build(self):
-        """Constrói a espinha do tubo (Trajectory + Transverse Geometry)."""
+        """Builds the spine of the tube (Trajectory + Transverse Geometry)."""
         curr_theta = flatten_tensors(list(self.model.parameters())).detach()
         num_params = curr_theta.numel()
         
         print(f"    [TRL] Build Init: P={num_params}, T={self.T}, K={self.k}")
 
-        # 1. Base Inicial (Lanczos): Encontra direções de maior curvatura (Stiff)
-        # Usamos 10 batches para estimar H
+        # 1. Initial Base (Lanczos): Finds directions of greatest curvature (Stiff)
+        # We use 10 batches to estimate H
         hvp_fn = get_hvp_function(self.model, self.loader, DEVICE, num_batches=10)
         
         op = sla.LinearOperator((num_params, num_params), matvec=hvp_fn)
@@ -374,35 +370,35 @@ class PracticalTRL:
         N = torch.from_numpy(vecs[:, idx].copy()).float().to(DEVICE)     # [P, k]
         evals = torch.from_numpy(vals[idx].copy()).float().to(DEVICE)    # [k]
 
-        # Proteção contra autovalores negativos (non-convex noise)
+        # Protection against negative eigenvalues (non-convex noise)
         evals = torch.maximum(evals, torch.tensor(0.0, device=DEVICE))
 
         # 2. Tangente Inicial (v): 
-        # Heurística: Direção aleatória projetada no espaço nulo das direções stiff
+        # Heuristic: Random direction projected onto the null space of the stiff directions
         vr = torch.randn(num_params, device=DEVICE)
-        # Remove projeção em N
+        # Remove projection in N
         vr = vr - N @ (N.T @ vr)
         v = vr / (vr.norm() + 1e-9)
 
-        # Iterador para o SGD Geométrico
+        # Iterator for the Geometric SGD
         data_iterator = iter(self.loader)
 
-        print(f"    [TRL] Iniciando loop de construção ({self.T} passos)...")
+        print(f"    [TRL] Starting build loop ({self.T} steps)...")
         for _ in range(self.T):
             
             # A. Armazenar Geometria Transversal Local
             # Covariancia Transversal: Sigma = (H + Prior)^-1
-            # Prior projetada = diagonal da prior nas direções N
+            # Prior projected = diagonal of the prior in the N directions
             prior_proj = torch.sum((N ** 2) * self.prior.unsqueeze(1), dim=0) # [k]
 
-            # Precisão Total = Autovalor (Dados) + Prior (Regularização)
+            # Total Accuracy = Eigenvalue (Data) + Prior (Regularization)
             prec = evals + prior_proj
             
-            # Clamp de segurança para evitar NaN se a precisão for muito baixa
-            # (Aqui o Boost na Prior ajuda muito a manter > 1.0)
+            # Safety clamp to prevent NaN if the precision is too low
+            # (Here, the Boost in Priority helps a lot to keep > 1.0)
             prec = torch.clamp(prec, min=1e-6)
             
-            # Fator de Escala (L) = 1 / sqrt(precisão)
+            # Scale Factor (L) = 1 / sqrt(precision)
             scale_factors = torch.rsqrt(prec)
             L = torch.diag(scale_factors)
 
@@ -413,7 +409,7 @@ class PracticalTRL:
                 "L": L.clone().cpu(),
             })
 
-            # B. Passo Dinâmico na Espinha
+            # B. Dynamic Step in the Spine
             vector_to_parameters(curr_theta, self.model.parameters())
             self.model.zero_grad()
 
@@ -430,13 +426,13 @@ class PracticalTRL:
             grads = torch.autograd.grad(loss, self.model.parameters())
             g = flatten_tensors(grads)
 
-            # Gradiente Transversal (Corrige apenas perpendicular ao movimento)
+            # Transverse Gradient (Corrects only perpendicular to the movement)
             g_perp = g - torch.dot(g, v) * v
             
-            # Update: Avança v, Corrige g_perp
+            # Update: Advances v, Corrects g_perp
             theta_next = curr_theta + self.ds * v - self.eta * g_perp
 
-            # C. Transporte Paralelo Discreto
+            # C. Discrete Parallel Transport
             d = theta_next - curr_theta
             d_norm = d.norm()
             if d_norm > 1e-9:
@@ -444,28 +440,28 @@ class PracticalTRL:
             else:
                 v_new = v
 
-            # Projeção e Re-ortonormalização (QR) para atualizar N
+            # Projection and Re-orthonormalization (QR) to update N
             # N_new = N - v_new * (v_new^T * N)
             p_n = v_new @ N
             N_trans = N - torch.outer(v_new, p_n)
             
             N_new, _ = torch.linalg.qr(N_trans, mode='reduced')
 
-            # Atualiza estados
+            # Update statuses
             curr_theta = theta_next
             v = v_new
             N = N_new
-            # Assumimos que 'evals' (curvatura) muda lentamente, 
-            # então não rodamos Lanczos a cada passo para economizar tempo.
+            # We assume that 'evals' (curvature) changes slowly,
+            # so we don't run Lanczos at every step to save time.
 
     def predict(self, loader, n_samples=10, fix_bn_batches=15):
-        """Inferência Ensemble Amostrando do Tubo."""
+        """Sampling Tube Ensemble Inference."""
         ens_probs = []
         targets_all = []
 
-        # Amostra S modelos
+        # Sample S models
         for i in range(n_samples):
-            # 1. Sorteia ponto na espinha e ruído transversal
+            # 1. Draws a point on the spine and transverse noise
             pt = self.spine[np.random.randint(len(self.spine))]
             z = torch.randn(self.k, device=DEVICE)
             
@@ -481,9 +477,9 @@ class PracticalTRL:
             vector_to_parameters(theta_sample, self.model.parameters())
             fix_bn(self.model, self.loader, DEVICE, num_batches=fix_bn_batches)
 
-            # 3. Predição no conjunto todo
+            # 3. Prediction on the entire set
             preds_batch = []
-            get_targets = (i == 0) # Pega targets só na primeira vez
+            get_targets = (i == 0) # Pega targets only the first time
             
             with torch.no_grad():
                 for x, y in loader:
@@ -505,17 +501,17 @@ class PracticalTRL:
         else:
             final_targets = None
             
-        # Média das probabilidades (Bayesian Model Averaging)
+        # Average of the probabilities (Bayesian Model Averaging)
         mean_probs = torch.stack(ens_probs).mean(dim=0)
         return mean_probs, final_targets
 
 
 # ==============================================================================
-# 5. UTILITÁRIOS DE MÉTRICA E PLOT
+# 5. METRICS AND PLOT UTILITIES
 # ==============================================================================
 
 def calc_all_metrics(probs, targets):
-    # Proteção numérica robusta para evitar NaN no NLL
+    # Robust numerical protection to prevent NaN in NLL
     p = probs.clamp(1e-7, 1.0 - 1e-7)
 
     # NLL
@@ -544,27 +540,25 @@ def calc_all_metrics(probs, targets):
 
 
 def laplace_predict_loader(la, loader, pred_type, n_samples=30):
-    """
-    Wrapper para predição do Laplace processando batch-a-batch
-    para evitar estouro de memória com o Jacobiano.
-    """
+    """    Wrapper for Laplace process prediction processing batch-by-batch
+    to avoid memory overflow with the Jacobian."""
     all_preds = []
-    # Determina o método de link
+    # Determine the linking method
     # 'nn' (ELA) exige amostragem de pesos (mc)
-    # 'glm' (LLA) pode usar mc ou probit. Usamos mc para consistência.
+    # 'glm' (LLA) can use probit or mc. We use mc for consistency.
     link = "mc" if pred_type == "nn" else "probit"
     
     # Se for GLM MC, precisa passar n_samples
-    # Se for Probit, n_samples é ignorado
+    # If it is Probit, n_samples is ignored
     
     for x, _ in loader:
         x = x.to(DEVICE)
         
-        # Chamada segura compatível com laplace-torch > 0.1
+        # Safe call compatible with Laplace-torch > 0.1
         if pred_type == "nn":
              out = la(x, pred_type="nn", link_approx="mc", n_samples=n_samples)
         else:
-             # LLA (GLM) com Probit é analítico e rápido
+             # LLA (GLM) with Probit is analytical and fast
              out = la(x, pred_type="glm", link_approx="probit")
              
         all_preds.append(out.detach().cpu())
@@ -614,7 +608,7 @@ def plot_final(map_p, ela_p, lla_p, trl_p, targets):
 
     for label, prob, col, lw, _ in methods:
         ent = get_ent(prob)
-        # Estilo diferente para TRL
+        # Different style for TRL
         htype = 'step' if 'TRL' in label else 'bar'
         alpha = 1.0 if 'TRL' in label else 0.3
         
@@ -631,15 +625,13 @@ def plot_final(map_p, ela_p, lla_p, trl_p, targets):
 
 
 def run_real_grid_search(model, prior, tr_dl, val_dl):
-    """
-    Roda TRL com algumas configs no validation set e retorna a melhor.
-    """
+    """    Run TRL with some configurations on the validation set and return the best one."""
     print("\n>>> [GRID SEARCH] Otimizando TRL no Validation Set...")
 
     grid_params = {
         'steps': [10, 20],        
         'step_size': [0.03, 0.05],
-        'tube_scale': [0.5, 1.0] # Teste escalas menores
+        'tube_scale': [0.5, 1.0] # Test minor scales
     }
     
     keys, vals = zip(*grid_params.items())
@@ -651,11 +643,11 @@ def run_real_grid_search(model, prior, tr_dl, val_dl):
     for i, cfg in enumerate(combos):
         print(f"[{i+1}/{len(combos)}] Testando {cfg} ... ", end="")
         try:
-            # Versão leve para validação (k=5)
+            # Light version for validation (k=5)
             trl = PracticalTRL(model, prior, tr_dl, k_perp=5, **cfg)
             trl.build()
             
-            # Inferência rápida no Val (S=3 samples)
+            # Quick inference on Val (S=3 samples)
             p_val, t_val = trl.predict(val_dl, n_samples=3, fix_bn_batches=5)
             
             # Calc NLL
@@ -685,19 +677,19 @@ def run_real_grid_search(model, prior, tr_dl, val_dl):
 
 if __name__ == "__main__":
     
-    # 1. Carrega Dados
+    # 1. Load Data
     tr, val, ts = get_data()
     
     # 2. Carrega MAP
     model = train_or_load_map(tr, val)
-    torch.cuda.empty_cache() # Limpa memória
+    torch.cuda.empty_cache() # Clear memory
 
     # 3. BASELINE: LAPLACE LAST-LAYER (FULL)
-    # A estratégia "Last-Layer" é robusta, rápida e cabe na memória.
-    # É uma baseline SOTA para calibração eficiente.
+    # The "Last-Layer" strategy is robust, fast, and fits in memory.
+    # It is a SOTA baseline for efficient calibration.
     print("\n>>> [Baseline] Ajustando Laplace (Last-Layer)...")
     
-    # Subsample seguro para o Laplace Fit
+    # Subsample safe for the Laplace Fit
     subset_len = 5000 
     inds = torch.randperm(len(tr.dataset))[:subset_len]
     tr_sub = torch.utils.data.Subset(tr.dataset, inds)
@@ -714,16 +706,16 @@ if __name__ == "__main__":
     print("    Otimizando Prior (MargLik)...")
     la.optimize_prior_precision(method="marglik")
     
-    # 4. PREPARAR PRIOR PARA TRL (FULL-NETWORK)
-    # Aqui fazemos a expansão da prior da last layer para a rede toda.
-    # + APLICAMOS BOOSTING PARA EVITAR EXPLOSÃO NAS CONVOLUÇÕES.
+    # 4. PREPARE PRIOR FOR TRL (FULL-NETWORK)
+    # Here we expand the prior of the last layer to the entire network.
+    # + WE APPLY BOOSTING TO PREVENT EXPLOSION IN CONVOLUTIONS.
     
     prior_raw = la.prior_precision
-    # Se for last layer full, prior_raw é matriz. Se diag, é vetor. Se escalar...
+    # If the last layer is full, prior_raw is a matrix. If diag, it is a vector. If scalar...
     # Marglik usually gives scalar or vector for layer.
     
     if torch.is_tensor(prior_raw) and prior_raw.ndim > 1:
-        # Se for matriz de precisão full (KxK), pega a diagonal média
+        # If it is a full precision matrix (KxK), take the average of the diagonal.
         base_val = prior_raw.diag().mean().item()
     elif torch.is_tensor(prior_raw):
         base_val = prior_raw.mean().item()
@@ -733,17 +725,17 @@ if __name__ == "__main__":
     print(f"\n[TRL Setup] Prior Base (LL): {base_val:.5f}")
     
     # >>> BOOSTING <<<
-    # Aumentamos a regularização para o TRL Full-Network
+    # We increased the regularization for the TRL Full-Network
     boost_factor = 50.0 
     safe_prior_val = max(base_val * boost_factor, 5.0) 
     print(f"[TRL Setup] Prior Boosted (Full): {safe_prior_val:.5f}")
     
-    # Cria vetor isotrópico full
+    # Create full isotropic vector
     num_total_params = sum(p.numel() for p in model.parameters())
     prior_vec_trl = torch.full((num_total_params,), safe_prior_val, device=DEVICE)
     
     
-    # 5. AVALIAÇÃO FINAL
+    # 5. FINAL EVALUATION
     targets = torch.cat([y for _,y in ts])
     
     # Avalia ELA/LLA
@@ -759,7 +751,7 @@ if __name__ == "__main__":
     
     print(f"\n>>> [FINAL RUN] TRL High-Fi (k=20, S=25)...")
     trl = PracticalTRL(model, prior_vec_trl, tr, 
-                       k_perp=20, # Maior rank para teste final
+                       k_perp=20, # Highest rank for final test
                        steps=best_cfg['steps'],
                        step_size=best_cfg['step_size'],
                        tube_scale=best_cfg['tube_scale'])
