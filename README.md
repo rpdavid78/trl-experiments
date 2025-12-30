@@ -1,6 +1,6 @@
 # Tubular Riemannian Laplace Approximations for Bayesian Neural Networks
 
-This repository contains the official experimental code for the paper **"Tubular Riemannian Laplace Approximations for Bayesian Neural Networks"** (ICML 2025 submission).
+This repository contains the official experimental code for the paper **"Tubular Riemannian Laplace Approximations for Bayesian Neural Networks"** ([arXiv:2412.22087](https://arxiv.org/abs/2412.22087)).
 
 ## Abstract
 
@@ -124,11 +124,11 @@ Batch Normalization statistics are handled by recalibrating them on a clean subs
 If you find this code useful for your research, please consider citing our paper:
 
 ```bibtex
-@inproceedings{trl2025,
+@article{david2024tubular,
   title={Tubular Riemannian Laplace Approximations for Bayesian Neural Networks},
-  author={Anonymous},
-  booktitle={International Conference on Machine Learning (ICML)},
-  year={2026}
+  author={David, Rodrigo Pereira},
+  journal={arXiv preprint arXiv:2412.22087},
+  year={2024}
 }
 ```
 
