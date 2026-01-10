@@ -128,7 +128,7 @@ If you find this code useful for your research, please consider citing our paper
   title={Tubular Riemannian Laplace Approximations for Bayesian Neural Networks},
   author={David, Rodrigo Pereira},
   journal={arXiv preprint arXiv:2412.22087},
-  year={2024}
+  year={2026}
 }
 ```
 
