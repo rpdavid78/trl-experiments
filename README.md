@@ -119,18 +119,7 @@ The following hyperparameters are used for the experiments:
 
 Batch Normalization statistics are handled by recalibrating them on a clean subset of training data for each posterior sample ("FixBN"), a crucial step for valid inference in the weight space of deep networks.
 
-## Citation
 
-If you find this code useful for your research, please consider citing our paper:
-
-```bibtex
-@article{david2024tubular,
-  title={Tubular Riemannian Laplace Approximations for Bayesian Neural Networks},
-  author={David, Rodrigo Pereira},
-  journal={arXiv preprint arXiv:2412.22087},
-  year={2026}
-}
-```
 
 ## License
 
