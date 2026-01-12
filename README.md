@@ -128,11 +128,11 @@ Batch Normalization statistics are handled by recalibrating them on a clean subs
 If you find this code useful for your research, please consider citing our paper:
 
 ```bibtex
-@article{david2024tubular,
+@article{david2026tubular,
   title={Tubular Riemannian Laplace Approximations for Bayesian Neural Networks},
   author={David, Rodrigo Pereira},
   journal={arXiv preprint arXiv:2412.22087},
-  year={2024}
+  year={2026}
 }
 
 This project is released for academic and research purposes.
